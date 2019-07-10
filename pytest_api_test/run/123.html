@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>123.html</h1>
+    <p>Report generated on 18-Jun-2019 at 14:59:36 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v1.20.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_05</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;4.6.1&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.12.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.10586-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;allure-pytest&apos;: &apos;2.6.5&apos;, &apos;forked&apos;: &apos;1.0.2&apos;, &apos;html&apos;: &apos;1.20.0&apos;, &apos;metadata&apos;: &apos;1.8.0&apos;, &apos;rerunfailures&apos;: &apos;7.0&apos;, &apos;xdist&apos;: &apos;1.28.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.7.3</td></tr></table>
+    <h2>Summary</h2>
+    <p>27 tests ran in 9.44 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">6 passed</span>, <input checked="true" class="filter" data-test-result="skipped" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">1 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">21 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_1</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_1&gt;<br/>item = {&#x27;case_id&#x27;: 1, &#x27;case_name&#x27;: &#x27;查询北京天气&#x27;, &#x27;checkpoint&#x27;: &#x27;北京&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:31 - Auto_api_test.log - INFO - ================开始测试【1】用例======【查询北京天气】===============
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【checkpoint】:北京
+2019-06-18 14:59:31 - Auto_api_test.log - ERROR - 断言出错了&#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【1】用例======【查询北京天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:北京
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_2</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_2&gt;<br/>item = {&#x27;case_id&#x27;: 2, &#x27;case_name&#x27;: &#x27;查询上海天气&#x27;, &#x27;checkpoint&#x27;: &#x27;上海&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:31 - Auto_api_test.log - INFO - ================开始测试【2】用例======【查询上海天气】===============
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:31 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:上海
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【2】用例======【查询上海天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:上海
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_3</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_3&gt;<br/>item = {&#x27;case_id&#x27;: 3, &#x27;case_name&#x27;: &#x27;查询珠海天气&#x27;, &#x27;checkpoint&#x27;: &#x27;珠海&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【3】用例======【查询珠海天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;珠海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:珠海
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【3】用例======【查询珠海天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;珠海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:珠海
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_4</td>
+          <td class="col-duration">0.18</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_4&gt;<br/>item = {&#x27;case_id&#x27;: 4, &#x27;case_name&#x27;: &#x27;查询合肥天气&#x27;, &#x27;checkpoint&#x27;: &#x27;合肥&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【4】用例======【查询合肥天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:合肥
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【4】用例======【查询合肥天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:合肥
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_5</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_5&gt;<br/>item = {&#x27;case_id&#x27;: 5, &#x27;case_name&#x27;: &#x27;查询乌鲁木齐天气&#x27;, &#x27;checkpoint&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【5】用例======【查询乌鲁木齐天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:乌鲁木齐
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【5】用例======【查询乌鲁木齐天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:乌鲁木齐
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_6</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_6&gt;<br/>item = {&#x27;case_id&#x27;: 6, &#x27;case_name&#x27;: &#x27;查询昌吉天气&#x27;, &#x27;checkpoint&#x27;: &#x27;昌吉&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【6】用例======【查询昌吉天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;昌吉&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:昌吉
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【6】用例======【查询昌吉天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;昌吉&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:昌吉
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_7</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_7&gt;<br/>item = {&#x27;case_id&#x27;: 7, &#x27;case_name&#x27;: &#x27;查询石河子天气&#x27;, &#x27;checkpoint&#x27;: &#x27;石河子&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【7】用例======【查询石河子天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;石河子&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【checkpoint】:石河子
+2019-06-18 14:59:32 - Auto_api_test.log - ERROR - 断言出错了&#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【7】用例======【查询石河子天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;石河子&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:石河子
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_8</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_8&gt;<br/>item = {&#x27;case_id&#x27;: 8, &#x27;case_name&#x27;: &#x27;查询伊宁天气&#x27;, &#x27;checkpoint&#x27;: &#x27;伊宁&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:32 - Auto_api_test.log - INFO - ================开始测试【8】用例======【查询伊宁天气】===============
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;伊宁&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:32 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【checkpoint】:伊宁
+2019-06-18 14:59:33 - Auto_api_test.log - ERROR - 断言出错了&#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【8】用例======【查询伊宁天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;伊宁&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:伊宁
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_excel_request.py::Test_Excel_Class::test_02_9</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_excel_request.Test_Excel_Class testMethod=test_02_9&gt;<br/>item = {&#x27;case_id&#x27;: 9, &#x27;case_name&#x27;: &#x27;查询喀什天气&#x27;, &#x27;checkpoint&#x27;: &#x27;石家庄&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_excel_request.py:39: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_excel_request.py:34: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:33 - Auto_api_test.log - INFO - ================开始测试【9】用例======【查询喀什天气】===============
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;石家庄&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【checkpoint】:石家庄
+2019-06-18 14:59:33 - Auto_api_test.log - ERROR - 断言出错了&#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【9】用例======【查询喀什天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;石家庄&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:石家庄
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Yaml_Class::test_01_2</td>
+          <td class="col-duration">0.24</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Yaml_Class testMethod=test_01_2&gt;<br/>item = {&#x27;case_id&#x27;: 2, &#x27;case_name&#x27;: &#x27;查询上海的数字&#x27;, &#x27;checkpoint&#x27;: {&#x27;reason&#x27;: &#x27;s123&#x27;}, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*yaml_test_data)<br/>    def test_01(self,item):<br/>        url = Get_Config().get_config(&#x27;URL&#x27;, &#x27;server&#x27;)<br/>        method = &#x27;get&#x27;<br/>        res = Father_Request().send_request(method,url,eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(url))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(method))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;][&#x27;reason&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:68: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:63: in test_01<br/>    self.assertIn(item[&#x27;checkpoint&#x27;][&#x27;reason&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:33 - Auto_api_test.log - INFO - ================开始测试【2】用例======【查询上海的数字】===============
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;s123&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - ERROR - 断言出错了&#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【2】用例======【查询上海的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;s123&#x27;}
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_1</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_1&gt;<br/>item = {&#x27;case_id&#x27;: 1, &#x27;case_name&#x27;: &#x27;查询北京天气&#x27;, &#x27;checkpoint&#x27;: &#x27;北京&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【1】用例======【查询北京天气】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【checkpoint】:北京
+2019-06-18 14:59:34 - Auto_api_test.log - ERROR - 断言出错了&#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【1】用例======【查询北京天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:北京
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;北京&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_2</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_2&gt;<br/>item = {&#x27;case_id&#x27;: 2, &#x27;case_name&#x27;: &#x27;查询上海天气&#x27;, &#x27;checkpoint&#x27;: &#x27;上海&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【2】用例======【查询上海天气】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【checkpoint】:上海
+2019-06-18 14:59:34 - Auto_api_test.log - ERROR - 断言出错了&#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【2】用例======【查询上海天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:上海
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;上海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_3</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_3&gt;<br/>item = {&#x27;case_id&#x27;: 3, &#x27;case_name&#x27;: &#x27;查询珠海天气&#x27;, &#x27;checkpoint&#x27;: &#x27;珠海&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【3】用例======【查询珠海天气】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;珠海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【checkpoint】:珠海
+2019-06-18 14:59:34 - Auto_api_test.log - ERROR - 断言出错了&#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【3】用例======【查询珠海天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;珠海&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:珠海
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;珠海&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_4</td>
+          <td class="col-duration">0.16</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_4&gt;<br/>item = {&#x27;case_id&#x27;: 4, &#x27;case_name&#x27;: &#x27;查询合肥天气&#x27;, &#x27;checkpoint&#x27;: &#x27;合肥&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【4】用例======【查询合肥天气】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【checkpoint】:合肥
+2019-06-18 14:59:34 - Auto_api_test.log - ERROR - 断言出错了&#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【4】用例======【查询合肥天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:合肥
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;合肥&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_5</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_5&gt;<br/>item = {&#x27;case_id&#x27;: 5, &#x27;case_name&#x27;: &#x27;查询乌鲁木齐天气&#x27;, &#x27;checkpoint&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【5】用例======【查询乌鲁木齐天气】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:乌鲁木齐
+2019-06-18 14:59:35 - Auto_api_test.log - ERROR - 断言出错了&#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【5】用例======【查询乌鲁木齐天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:乌鲁木齐
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;乌鲁木齐&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_6</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_6&gt;<br/>item = {&#x27;case_id&#x27;: 6, &#x27;case_name&#x27;: &#x27;查询昌吉天气&#x27;, &#x27;checkpoint&#x27;: &#x27;昌吉&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:35 - Auto_api_test.log - INFO - ================开始测试【6】用例======【查询昌吉天气】===============
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;昌吉&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:昌吉
+2019-06-18 14:59:35 - Auto_api_test.log - ERROR - 断言出错了&#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【6】用例======【查询昌吉天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;昌吉&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:昌吉
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;昌吉&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_7</td>
+          <td class="col-duration">0.15</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_7&gt;<br/>item = {&#x27;case_id&#x27;: 7, &#x27;case_name&#x27;: &#x27;查询石河子天气&#x27;, &#x27;checkpoint&#x27;: &#x27;石河子&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:35 - Auto_api_test.log - INFO - ================开始测试【7】用例======【查询石河子天气】===============
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;石河子&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:石河子
+2019-06-18 14:59:35 - Auto_api_test.log - ERROR - 断言出错了&#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【7】用例======【查询石河子天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;石河子&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:石河子
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;石河子&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_8</td>
+          <td class="col-duration">0.17</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_8&gt;<br/>item = {&#x27;case_id&#x27;: 8, &#x27;case_name&#x27;: &#x27;查询伊宁天气&#x27;, &#x27;checkpoint&#x27;: &#x27;伊宁&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:35 - Auto_api_test.log - INFO - ================开始测试【8】用例======【查询伊宁天气】===============
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;伊宁&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:伊宁
+2019-06-18 14:59:35 - Auto_api_test.log - ERROR - 断言出错了&#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【8】用例======【查询伊宁天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;伊宁&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:伊宁
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;伊宁&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_02_9</td>
+          <td class="col-duration">0.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_02_9&gt;<br/>item = {&#x27;case_id&#x27;: 9, &#x27;case_name&#x27;: &#x27;查询喀什天气&#x27;, &#x27;checkpoint&#x27;: &#x27;石家庄&#x27;, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*excel_test_data)<br/>    def test_02(self,item):<br/>        res = Father_Request().send_request(item[&#x27;method&#x27;],item[&#x27;url&#x27;],eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(item[&#x27;url&#x27;]))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(item[&#x27;method&#x27;]))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_request.py:96: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_request.py:91: in test_02<br/>    self.assertIn(item[&#x27;checkpoint&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:35 - Auto_api_test.log - INFO - ================开始测试【9】用例======【查询喀什天气】===============
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求url】:http://apis.juhe.cn/simpleWeather/query
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;city&#x27;: &#x27;石家庄&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:石家庄
+2019-06-18 14:59:35 - Auto_api_test.log - ERROR - 断言出错了&#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【9】用例======【查询喀什天气】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://apis.juhe.cn/simpleWeather/query
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;city&#x27;: &#x27;石家庄&#x27;, &#x27;key&#x27;: &#x27;1806a36e3d72a53a64962b0d57a246c7&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:石家庄
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;石家庄&#x27; not found in &#x27;{&quot;resultcode&quot;:&quot;112&quot;,&quot;reason&quot;:&quot;超过每日可允许请求次数!&quot;,&quot;result&quot;:null,&quot;error_code&quot;:10012}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_04</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_request.Test_Excel_Class testMethod=test_04&gt;<br/><br/>    @allure.feature(&#x27;测试用例3&#x27;)<br/>    def test_04(self):<br/>&gt;       assert (3==4)<br/><span class="error">E       AssertionError: assert 3 == 4</span><br/><br/>test_request.py:107: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_yaml_request.py::Test_Yaml_Class::test_01_2</td>
+          <td class="col-duration">0.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;run.test_yaml_request.Test_Yaml_Class testMethod=test_01_2&gt;<br/>item = {&#x27;case_id&#x27;: 2, &#x27;case_name&#x27;: &#x27;查询上海的数字&#x27;, &#x27;checkpoint&#x27;: {&#x27;reason&#x27;: &#x27;s123&#x27;}, &#x27;headers&#x27;: None, ...}<br/><br/>    @ddt.data(*yaml_test_data)<br/>    def test_01(self,item):<br/>        url = Get_Config().get_config(&#x27;URL&#x27;, &#x27;server&#x27;)<br/>        method = &#x27;get&#x27;<br/>        res = Father_Request().send_request(method,url,eval(str(item[&#x27;params&#x27;])))<br/>        #日志输入<br/>        My_Log().info(&#x27;================开始测试【{}】用例======【{}】===============&#x27;.format(item[&#x27;case_id&#x27;],item[&#x27;case_name&#x27;]))<br/>        My_Log().info(&#x27;【请求url】:{}&#x27;.format(url))<br/>        My_Log().info(&#x27;【请求方式】:{}&#x27;.format(method))<br/>        My_Log().info(&#x27;【请求headers】:{}&#x27;.format(item[&#x27;headers&#x27;]))<br/>        My_Log().info(&#x27;【请求参数】:{}&#x27;.format(item[&#x27;params&#x27;]))<br/>        My_Log().info(&#x27;【响应参数】:{}&#x27;.format(res.text))<br/>        My_Log().info(&#x27;【Response code】:{}&#x27;.format(res.status_code))<br/>        My_Log().info(&#x27;【checkpoint】:{}&#x27;.format(item[&#x27;checkpoint&#x27;]))<br/>    <br/>        try:<br/>            self.assertEqual(res.status_code,200)<br/>            self.assertIn(item[&#x27;checkpoint&#x27;][&#x27;reason&#x27;],res.text)<br/>            test_result = &#x27;Pass&#x27;<br/>        except AssertionError as e:<br/>            test_result = &#x27;Failed&#x27;<br/>            My_Log().error(&#x27;断言出错了{}&#x27;.format(e))<br/>&gt;           raise e<br/><br/>test_yaml_request.py:44: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>test_yaml_request.py:39: in test_01<br/>    self.assertIn(item[&#x27;checkpoint&#x27;][&#x27;reason&#x27;],res.text)<br/><span class="error">E   AssertionError: &#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;</span><br/>----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:36 - Auto_api_test.log - INFO - ================开始测试【2】用例======【查询上海的数字】===============
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;s123&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - ERROR - 断言出错了&#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 本条用例的测试结论是:Failed
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【2】用例======【查询上海的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;上海&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;s123&#x27;}
+[1m[31mERROR   [0m Auto_api_test.log:my_log.py:49 断言出错了&#x27;s123&#x27; not found in &#x27;{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0006 3189&quot;},&quot;error_code&quot;:0}&#x27;
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Failed</div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">test_request.py::Test_Excel_Class::test_03::setup</td>
+          <td class="col-duration">0.00</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;test_request.py&#x27;, 99, &#x27;Skipped: 未开发完成！&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_request.py::Test_Yaml_Class::test_01_1</td>
+          <td class="col-duration">0.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:33 - Auto_api_test.log - INFO - ================开始测试【1】用例======【查询北京的数字】===============
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0554 0079&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【1】用例======【查询北京的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0554 0079&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_request.py::Test_Yaml_Class::test_01_3</td>
+          <td class="col-duration">0.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:33 - Auto_api_test.log - INFO - ================开始测试【3】用例======【查询合肥的数字】===============
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0678 5142&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:33 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【3】用例======【查询合肥的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0678 5142&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_request.py::Test_Yaml_Class::test_01_4</td>
+          <td class="col-duration">0.28</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:34 - Auto_api_test.log - INFO - ================开始测试【4】用例======【查询乌鲁木齐的数字】===============
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;3527 7627 2606 7871&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:34 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【4】用例======【查询乌鲁木齐的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;3527 7627 2606 7871&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_yaml_request.py::Test_Yaml_Class::test_01_1</td>
+          <td class="col-duration">0.24</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:35 - Auto_api_test.log - INFO - ================开始测试【1】用例======【查询北京的数字】===============
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0554 0079&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:35 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【1】用例======【查询北京的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;北京&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0554 0079&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_yaml_request.py::Test_Yaml_Class::test_01_3</td>
+          <td class="col-duration">0.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:36 - Auto_api_test.log - INFO - ================开始测试【3】用例======【查询合肥的数字】===============
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0678 5142&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【3】用例======【查询合肥的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;合肥&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;0678 5142&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_yaml_request.py::Test_Yaml_Class::test_01_4</td>
+          <td class="col-duration">0.23</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">----------------------------- Captured stdout call -----------------------------<br/>2019-06-18 14:59:36 - Auto_api_test.log - INFO - ================开始测试【4】用例======【查询乌鲁木齐的数字】===============
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求方式】:get
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求headers】:None
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【请求参数】:{&#x27;chars&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;3527 7627 2606 7871&quot;},&quot;error_code&quot;:0}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【Response code】:200
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+2019-06-18 14:59:36 - Auto_api_test.log - INFO - 本条用例的测试结论是:Pass
+------------------------------ Captured log call -------------------------------<br/>[32mINFO    [0m Auto_api_test.log:my_log.py:45 ================开始测试【4】用例======【查询乌鲁木齐的数字】===============
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求url】:http://v.juhe.cn/telecode/to_telecodes.php
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求方式】:get
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求headers】:None
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【请求参数】:{&#x27;chars&#x27;: &#x27;乌鲁木齐&#x27;, &#x27;key&#x27;: &#x27;e23273293b709acd3be5b9d66598179b&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【响应参数】:{&quot;reason&quot;:&quot;success&quot;,&quot;result&quot;:{&quot;telecodes&quot;:&quot;3527 7627 2606 7871&quot;},&quot;error_code&quot;:0}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【Response code】:200
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 【checkpoint】:{&#x27;reason&#x27;: &#x27;success&#x27;}
+[32mINFO    [0m Auto_api_test.log:my_log.py:45 本条用例的测试结论是:Pass</div></td></tr></tbody></table></body></html>

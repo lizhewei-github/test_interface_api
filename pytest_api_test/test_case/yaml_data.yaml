@@ -1,0 +1,44 @@
+#++++++++++++++++++++++++++++++++++++ota_update数据+++++++++++++++++++++++++++++++++++
+#================用例1====================
+---
+case_id: 1
+case_name: 查询北京的数字
+headers:
+params:
+  chars: 北京
+  key: e23273293b709acd3be5b9d66598179b
+checkpoint:
+  reason: success
+
+---
+#================用例2====================
+case_id: 2
+case_name: 查询上海的数字
+headers:
+params:
+  chars: 上海
+  key: e23273293b709acd3be5b9d66598179b
+checkpoint:
+  reason: s123
+---
+#================用例2====================
+case_id: 3
+case_name: 查询合肥的数字
+headers:
+params:
+  chars: 合肥
+  key: e23273293b709acd3be5b9d66598179b
+checkpoint:
+  reason: success
+---
+#================用例2====================
+case_id: 4
+case_name: 查询乌鲁木齐的数字
+headers:
+params:
+  chars: 乌鲁木齐
+  key: e23273293b709acd3be5b9d66598179b
+checkpoint:
+  reason: success
+
+...

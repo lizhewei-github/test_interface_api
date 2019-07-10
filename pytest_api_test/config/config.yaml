@@ -1,0 +1,8 @@
+#db配置
+DB1:
+  host: 10.20.123.41
+  port: 3306
+  user: root
+  password: Unisound@123
+  database: app_wheeljack_service_sh6y
+  charset: utf8
